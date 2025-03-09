@@ -1,4 +1,5 @@
 from serial import Serial
+
 import time
 ser = Serial('/dev/ttyS0', baudrate=115200, timeout=1)
 
