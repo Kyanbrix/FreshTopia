@@ -1,8 +1,12 @@
-import barcode_logic
-import connection
+import controller.barcode_logic as barcode_logic
+import db_connection.connection as connection
 from pathlib import Path
-import utilities
+import utils.utilities as utilities
 import psycopg2
+import utils.expiration_check as ex
+
+
+from gpiozero import LED
 
 import ttkbootstrap as ttk
 import traceback
@@ -19,6 +23,9 @@ dateadded = ''
 barcode_id = ''
 
 
+led1 = LED(17)
+
+expired_products_list = []
 
 def change_frame_content(): # <--------------------------- INVENTORY BUTTON IN MENU
 
@@ -116,7 +123,7 @@ def getbarcode_value(event):
 
     value = scanner_entry.get()
 
-    con = connection.ConnectionPool().sql_connection()
+    con = connection.ConnectionPool('mydb.db').sql_connection()
 
 
     try:
@@ -199,6 +206,7 @@ def pull_out_cmnd_btn(): # <--------------------- PULL OUT BUTTON COMMAND
    
 
 def scan_item_btn():
+
     for widget in target_frame.winfo_children():
         widget.destroy()
 
@@ -232,7 +240,7 @@ def generateBtn():
     print(date_of_expiration)
 
 
-    date_object = datetime.strptime(date_of_expiration,"%d-%m-%Y")
+    date_object = datetime.strptime(date_of_expiration,"%d-%m-%Y").date()
 
 
     con = connection.ConnectionPool().sql_connection()
@@ -241,13 +249,6 @@ def generateBtn():
         path = barcode_logic.generate_barcode_image()
 
         file = Path(f"C:/Users/Admin/Documents/freshtopia/barcde_images/{path}.png") # need ilisan ang directory para sa linux
-
-        while True:
-          if not file.exists():
-              print('File Not Found!')
-          else:
-              print('File Found!')
-              break
 
         Messagebox.show_info(title="Barcode Image Created!", message="Item added to the database", alert=True)
 
@@ -260,12 +261,11 @@ def generateBtn():
         cursor = con.cursor()
 
         query = """INSERT INTO inventory (barcode_id, item_name, date_added, date_expiration) VALUES(%s,%s,%s,%s)"""
-        data = (str(path), itemname_entry.get(), current_date.strftime("%d-%m-%Y"), date_object)
+        data = (str(path), itemname_entry.get(), current_date.strftime("%d-%m-%Y"), str(date_object))
 
         cursor.execute(query=query,vars=data)
         con.commit()
 
-        con.close()
 
         itemname_entry.delete(0,ttk.END)
         day_combobox.delete(0,ttk.END)
@@ -279,9 +279,34 @@ def generateBtn():
     finally:
         con.close()
 
+
+def check_item_expiration():
+    conn = connection.ConnectionPool().sql_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM storage")
+
+    rows = cursor.fetchall()
+
+    for row in rows:
+        if row[0] in expired_products_list:
+            continue
+        if ex.is_expired(row[3]):
+            
+            led1.on()
+        
+
+
+
+
+
 def exitBtn():
     root.quit()
     SystemExit(0)
+
+
+
 
 
 root = ttk.Window(themename="solar", title="Dynamic Frame Content", size=(1100, 600))
@@ -327,12 +352,9 @@ year_combobox = ttk.Combobox()
 scanner_entry = ttk.Entry()
 info_label = ttk.Label(text='Scan a Barcode ID to check its Information')
 
-
-
-root.state('zoomed')
-
-
+root.after(5000,)
 
 if __name__ == '__main__':
+
     root.mainloop()
     
