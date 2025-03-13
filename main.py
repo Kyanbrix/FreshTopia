@@ -1,13 +1,12 @@
-import controller.barcode_logic as barcode_logic
 import db_connection.connection as connection
+from db_connection.connection import ConnectionPool
 from pathlib import Path
+from controller.barcode_logic import BarcodeController as BC
 import utils.utilities as utilities
-import psycopg2
 import utils.expiration_check as ex
 
 
 from gpiozero import LED
-
 import ttkbootstrap as ttk
 import traceback
 from datetime import datetime
@@ -37,14 +36,16 @@ def change_frame_content(): # <--------------------------- INVENTORY BUTTON IN M
     for widget in target_frame.winfo_children():
         widget.destroy()
 
+    con = ConnectionPool().sql_connection()
+    
     try:
-        con = connection.ConnectionPool().sql_connection()
+        
         cursor = con.cursor()
         cursor.execute("SELECT * FROM inventory")
 
         data = cursor.fetchall()
 
-        con.close()
+        
 
 
         style = ttk.Style()
@@ -71,7 +72,8 @@ def change_frame_content(): # <--------------------------- INVENTORY BUTTON IN M
     except Exception as e:
         print(f"Error on when getting inventory table {e}")
 
-
+    finally:
+        con.close()
 
 def addItemBtn():   # <-------------------------------- BUTTON ADD ITEM IN MENU
     for widget in target_frame.winfo_children():
@@ -123,8 +125,7 @@ def getbarcode_value(event):
 
     value = scanner_entry.get()
 
-    con = connection.ConnectionPool('mydb.db').sql_connection()
-
+    con = ConnectionPool().sql_connection()
 
     try:
         cursor = con.cursor()
@@ -172,9 +173,7 @@ def getbarcode_value(event):
         scanner_entry.bind('<Return>',getbarcode_value)
 
 
-
-
-    except psycopg2.Exception as e:
+    except Exception as e:
         print(e)
         traceback.print_exception()
     finally:
@@ -183,7 +182,7 @@ def getbarcode_value(event):
 
 def pull_out_cmnd_btn(): # <--------------------- PULL OUT BUTTON COMMAND
 
-    con = connection.ConnectionPool().sql_connection()
+    con = ConnectionPool().sql_connection()
     
     try:
         cursor = con.cursor()
@@ -203,7 +202,6 @@ def pull_out_cmnd_btn(): # <--------------------- PULL OUT BUTTON COMMAND
 
 
 
-   
 
 def scan_item_btn():
 
@@ -243,10 +241,13 @@ def generateBtn():
     date_object = datetime.strptime(date_of_expiration,"%d-%m-%Y").date()
 
 
-    con = connection.ConnectionPool().sql_connection()
+    con = ConnectionPool().sql_connection()
 
+    
     try:
-        path = barcode_logic.generate_barcode_image()
+
+        path = BC.generate_barcode_image()
+
 
         file = Path(f"C:/Users/Admin/Documents/freshtopia/barcde_images/{path}.png") # need ilisan ang directory para sa linux
 
@@ -299,13 +300,9 @@ def check_item_expiration():
 
 
 
-
-
 def exitBtn():
     root.quit()
     SystemExit(0)
-
-
 
 
 
@@ -352,7 +349,6 @@ year_combobox = ttk.Combobox()
 scanner_entry = ttk.Entry()
 info_label = ttk.Label(text='Scan a Barcode ID to check its Information')
 
-root.after(5000,)
 
 if __name__ == '__main__':
 
