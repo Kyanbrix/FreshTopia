@@ -7,12 +7,13 @@ import utils.expiration_check as ex
 
 
 from gpiozero import LED
+from db_connection.database import Database
 import ttkbootstrap as ttk
 import traceback
 from datetime import datetime
 from ttkbootstrap.constants import*
 from ttkbootstrap.dialogs.dialogs import Messagebox
-
+from controller.date_logic import DateFormatter as df
 
 is_scanning = False
 
@@ -36,17 +37,11 @@ def change_frame_content(): # <--------------------------- INVENTORY BUTTON IN M
     for widget in target_frame.winfo_children():
         widget.destroy()
 
-    con = ConnectionPool().sql_connection()
     
+    db = Database('mydatabase.db')
+
     try:
-        
-        cursor = con.cursor()
-        cursor.execute("SELECT * FROM inventory")
-
-        data = cursor.fetchall()
-
-        
-
+        data = db.fetch_all_query('SELECT * FROM storage')
 
         style = ttk.Style()
         style.configure("Treeview", font=("Arial", 14), rowheight=30)
@@ -73,7 +68,7 @@ def change_frame_content(): # <--------------------------- INVENTORY BUTTON IN M
         print(f"Error on when getting inventory table {e}")
 
     finally:
-        con.close()
+        db.disconnect()
 
 def addItemBtn():   # <-------------------------------- BUTTON ADD ITEM IN MENU
     for widget in target_frame.winfo_children():
@@ -123,17 +118,15 @@ def addItemBtn():   # <-------------------------------- BUTTON ADD ITEM IN MENU
 def getbarcode_value(event):
     global scanner_entry, info_label,dateofexpiration,dateadded,barcode_id
 
-    value = scanner_entry.get()
+    value = str(scanner_entry.get)
 
-    con = ConnectionPool().sql_connection()
+    db = Database('mydatabase.db')
 
     try:
-        cursor = con.cursor()
+        
 
-        cursor.execute(f"SELECT * FROM inventory WHERE barcode_id = '{value}'")
-
-        data = cursor.fetchall()
-
+        data = db.fetch_all_query('SELECT * FROM inventory WHERE barcode_id = ?',(value))
+        
         if len(data) == 0:
             print('Barcode ID Not Found!')
         else:
@@ -177,30 +170,26 @@ def getbarcode_value(event):
         print(e)
         traceback.print_exception()
     finally:
-        con.close()
+        db.disconnect()
 
 
 def pull_out_cmnd_btn(): # <--------------------- PULL OUT BUTTON COMMAND
 
-    con = ConnectionPool().sql_connection()
     
+    db = Database('mydatabase.db')
+
     try:
-        cursor = con.cursor()
 
-        cursor.execute(F"DELETE FROM inventory WHERE barcode_id = '{barcode_id}'")
-
-        con.commit()
+        db.executeQuery('DELETE FROM storage WHERE barcode_id = ?',(barcode_id))
 
         Messagebox.show_info(target_frame,title='Item Removed',message=f"Barcode ID {barcode_id} has been removed from the database")
 
     except Exception as e:
+
         print(f"Error on pulling out an item \n{e}")
-    
+
     finally:
-        con.close()
-
-
-
+        db.disconnect()
 
 
 def scan_item_btn():
@@ -235,11 +224,11 @@ def generateBtn():
 
     date_of_expiration = '-'.join([day,month,year])
 
-    print(date_of_expiration)
+
+    date_expired_obj = datetime.strptime(date_of_expiration,"%d-%m-%Y").date()
 
 
-    date_object = datetime.strptime(date_of_expiration,"%d-%m-%Y").date()
-
+    db = Database('mydatabase.db')
 
     con = ConnectionPool().sql_connection()
 
@@ -248,8 +237,8 @@ def generateBtn():
 
         path = BC.generate_barcode_image()
 
-
-        file = Path(f"C:/Users/Admin/Documents/freshtopia/barcde_images/{path}.png") # need ilisan ang directory para sa linux
+        
+        file = Path(f"./{path}.png") # need ilisan ang directory para sa linux
 
         Messagebox.show_info(title="Barcode Image Created!", message="Item added to the database", alert=True)
 
@@ -257,15 +246,16 @@ def generateBtn():
         
         barcode_image.config(image=img)
         barcode_image.image = img
-        current_date = datetime.now()
-
+        
         cursor = con.cursor()
 
         query = """INSERT INTO inventory (barcode_id, item_name, date_added, date_expiration) VALUES(%s,%s,%s,%s)"""
-        data = (str(path), itemname_entry.get(), current_date.strftime("%d-%m-%Y"), str(date_object))
 
-        cursor.execute(query=query,vars=data)
-        con.commit()
+        data = (str(path), itemname_entry.get(), df.format_datetime_to_fullname(datetime.now().date()), str(date_expired_obj))
+
+        # data = db.executeQuery('INSERT INTO inventory (barcode_id, item_name, date_added, date_expiration) VALUES (?,?,?,?)',(path, itemname_entry.get(),str(current_date.strftime('%d-%m-%Y'))))
+
+        
 
 
         itemname_entry.delete(0,ttk.END)
@@ -278,7 +268,7 @@ def generateBtn():
         traceback.print_exc()
     
     finally:
-        con.close()
+        db.disconnect()
 
 
 def check_item_expiration():
