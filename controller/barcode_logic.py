@@ -9,7 +9,7 @@ from barcode.writer import ImageWriter
 
 class BarcodeController:
 
-    def generate_barcode_image(self):
+    def generate_barcode_image(self) -> str:
 
         data = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
 
